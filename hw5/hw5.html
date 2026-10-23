@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Lighting & Shading - Hierarchical Model</title>
+  <style>
+    body { background: #111; color: #ccc; font-family: monospace; margin: 15px; }
+    canvas { border: 1px solid #444; background: #08080c; }
+    .layout { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+    .editors { display: flex; flex-direction: column; gap: 10px; }
+    textarea {
+      background: #1a1a1a;
+      color: #0f0;
+      font: 12px monospace;
+      width: 420px;
+      height: 220px;
+      box-sizing: border-box;
+      border: 1px solid #444;
+    }
+    #shaderError { color: #f66; white-space: pre-wrap; width: 420px; margin: 0; }
+    .controls-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 10px;
+      max-width: 620px;
+    }
+    fieldset {
+      border: 1px solid #444;
+      background: #18181c;
+      padding: 8px 10px;
+      margin: 0;
+    }
+    legend { color: #6cf; font-weight: bold; padding: 0 5px; }
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 4px 0;
+      font-size: 12px;
+    }
+    .control-row input[type="range"] { flex: 1; }
+    .val-badge { min-width: 34px; text-align: right; color: #9f9; }
+    button, select {
+      background: #2a2a30;
+      color: #eee;
+      border: 1px solid #555;
+      padding: 4px 8px;
+      font-family: monospace;
+      cursor: pointer;
+    }
+    button:hover { background: #3a3a44; }
+  </style>
+</head>
+
+<body>
+  <h2>Hierarchical Model with Multiple Lights &amp; Shading</h2>
+  <p>Edit the shaders on the left; the canvas updates live as you type.<br>
+    Drag with the mouse to rotate the model. Use arrow keys and W/S keys to move the camera.<br>
+    Notice the 5-level hierarchy (Base Cylinder &rarr; Lower Cube &rarr; Upper Cone &rarr; Wrist Torus &rarr; Twin Smooth/Flat Spheres &amp; Claws).</p>
+
+  <div class="layout">
+    <div class="editors">
+      <div>
+        <b>Vertex Shader</b><br>
+        <textarea id="vertEditor" spellcheck="false"></textarea>
+      </div>
+      <div>
+        <b>Fragment Shader</b><br>
+        <textarea id="fragEditor" spellcheck="false"></textarea>
+      </div>
+      <pre id="shaderError"></pre>
+    </div>
+
+    <div>
+      <canvas id="glcanvas" width="520" height="440"></canvas>
+    </div>
+
+    <div class="controls-panel">
+      <!-- Template Global Rotation Controls -->
+      <fieldset>
+        <legend>Whole-Model &amp; Animation</legend>
+        <div class="control-row">
+          <label for="slider">Global Angle:</label>
+          <input type="range" id="slider" min="0" max="360" value="0">
+          <span id="sliderValue" class="val-badge">0</span>
+        </div>
+        <div class="control-row">
+          <select id="axisSelect">
+            <option value="x">X Rotation</option>
+            <option value="y" selected>Y Rotation</option>
+            <option value="z">Z Rotation</option>
+          </select>
+          <button id="spinButton">Start/Stop Spin</button>
+          <button id="animButton">Pause Wave</button>
+        </div>
+        <div class="control-row">
+          <label><input type="checkbox" id="rimToggle" checked> Fresnel Rim Glow</label>
+          <label><input type="checkbox" id="orbitLights" checked> Orbit Lights</label>
+        </div>
+      </fieldset>
+
+      <!-- Requirement 4a: Joint Movement Controls for >= 2 Segments -->
+      <fieldset>
+        <legend>Hierarchy Joint Movements (5 Levels)</legend>
+        <div class="control-row">
+          <label for="baseYaw">L1 Base Yaw:</label>
+          <input type="range" id="baseYaw" min="-180" max="180" value="20">
+          <span id="baseYawVal" class="val-badge">20°</span>
+        </div>
+        <div class="control-row">
+          <label for="lowerPitch">L2 Lower Arm:</label>
+          <input type="range" id="lowerPitch" min="-90" max="90" value="15">
+          <span id="lowerPitchVal" class="val-badge">15°</span>
+        </div>
+        <div class="control-row">
+          <label for="upperPitch">L3 Forearm Cone:</label>
+          <input type="range" id="upperPitch" min="-110" max="110" value="-30">
+          <span id="upperPitchVal" class="val-badge">-30°</span>
+        </div>
+        <div class="control-row">
+          <label for="wristRoll">L4 Wrist Torus:</label>
+          <input type="range" id="wristRoll" min="-180" max="180" value="0">
+          <span id="wristRollVal" class="val-badge">0°</span>
+        </div>
+        <div class="control-row">
+          <label for="clawSpread">L5 Claw Spread:</label>
+          <input type="range" id="clawSpread" min="0" max="60" value="25">
+          <span id="clawSpreadVal" class="val-badge">25°</span>
+        </div>
+      </fieldset>
+
+      <!-- Requirement 4b: Material Controls on Segments -->
+      <fieldset>
+        <legend>Segment A Material (L2 Lower Arm)</legend>
+        <div class="control-row">
+          <label for="seg1Kd">Diffuse (Kd):</label>
+          <input type="range" id="seg1Kd" min="0" max="1" step="0.05" value="0.9">
+          <span id="seg1KdVal" class="val-badge">0.90</span>
+        </div>
+        <div class="control-row">
+          <label for="seg1Ks">Specular (Ks):</label>
+          <input type="range" id="seg1Ks" min="0" max="1" step="0.05" value="0.0">
+          <span id="seg1KsVal" class="val-badge">0.00</span>
+        </div>
+        <div class="control-row">
+          <label for="seg1Shine">Shininess:</label>
+          <input type="range" id="seg1Shine" min="2" max="128" step="1" value="16">
+          <span id="seg1ShineVal" class="val-badge">16</span>
+        </div>
+        <div class="control-row">
+          <label for="seg1Color">Color:</label>
+          <input type="color" id="seg1Color" value="#e63946">
+          <label><input type="checkbox" id="seg1Flat"> Flat Shade</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Segment B Material (L3 Forearm &amp; Orbs)</legend>
+        <div class="control-row">
+          <label for="seg2Kd">Diffuse (Kd):</label>
+          <input type="range" id="seg2Kd" min="0" max="1" step="0.05" value="0.75">
+          <span id="seg2KdVal" class="val-badge">0.75</span>
+        </div>
+        <div class="control-row">
+          <label for="seg2Ks">Specular (Ks):</label>
+          <input type="range" id="seg2Ks" min="0" max="1" step="0.05" value="0.95">
+          <span id="seg2KsVal" class="val-badge">0.95</span>
+        </div>
+        <div class="control-row">
+          <label for="seg2Shine">Shininess:</label>
+          <input type="range" id="seg2Shine" min="2" max="128" step="1" value="64">
+          <span id="seg2ShineVal" class="val-badge">64</span>
+        </div>
+        <div class="control-row">
+          <label for="seg2Color">Color:</label>
+          <input type="color" id="seg2Color" value="#3a86ff">
+          <label><input type="checkbox" id="seg2Flat"> Force All Flat</label>
+        </div>
+      </fieldset>
+
+      <!-- Requirement 3 & 4b: Multiple Light Controls -->
+      <fieldset>
+        <legend>Light 1 (Key Light)</legend>
+        <div class="control-row">
+          <label for="l1X">Pos X:</label>
+          <input type="range" id="l1X" min="-6" max="6" step="0.2" value="3">
+          <label for="l1Y">Y:</label>
+          <input type="range" id="l1Y" min="-4" max="6" step="0.2" value="3.5">
+        </div>
+        <div class="control-row">
+          <label for="l1Intensity">Intensity:</label>
+          <input type="range" id="l1Intensity" min="0" max="2" step="0.05" value="1.1">
+          <input type="color" id="l1Color" value="#fff0cc">
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Light 2 (Secondary Rim/Fill Light)</legend>
+        <div class="control-row">
+          <label for="l2X">Pos X:</label>
+          <input type="range" id="l2X" min="-6" max="6" step="0.2" value="-3.5">
+          <label for="l2Y">Y:</label>
+          <input type="range" id="l2Y" min="-4" max="6" step="0.2" value="2.0">
+        </div>
+        <div class="control-row">
+          <label for="l2Intensity">Intensity:</label>
+          <input type="range" id="l2Intensity" min="0" max="2" step="0.05" value="0.9">
+          <input type="color" id="l2Color" value="#48cae4">
+        </div>
+      </fieldset>
+    </div>
+  </div>
+
+  <script src="transforms.js"></script>
+  <script src="models.js"></script>
+  <script src="main.js"></script>
+</body>
+
+</html>
